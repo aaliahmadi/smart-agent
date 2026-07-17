@@ -6,3 +6,8 @@ langchain-core
 langchain-ollama
 duckduckgo-search
 wikipedia
+
+# Testing dependencies
+pytest
+pytest-cov
+pytest-mock
