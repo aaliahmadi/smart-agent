@@ -6,7 +6,7 @@ langchain-core
 langchain-ollama
 duckduckgo-search
 wikipedia
-
+mypy_extensions
 pytest
 pytest-cov
 pytest-mock
