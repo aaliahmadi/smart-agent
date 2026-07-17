@@ -11,7 +11,9 @@ permissions:
   packages: write
 
 jobs:
-  # ------ CONTINUOUS INTEGRATION (TEST) ------
+  # ============================================
+  # CONTINUOUS INTEGRATION (TEST)
+  # ============================================
   test:
     name: Continuous Integration (Test)
     runs-on: ubuntu-latest
@@ -24,32 +26,50 @@ jobs:
       with:
         python-version: "3.10"
 
+    - name: Cache Python packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        # Install testing tools
-        pip install pytest pytest-cov
 
-    # Here you should create a dummy test file or adapt to your actual tests
-    - name: Run tests with pytest
-      run: |
-        # This is a placeholder. If you have actual tests, replace this.
-        # For example: pytest app/ -v
-        echo "No tests defined yet. Create a test file and update this step."
-
-    # Optional: Lint the code with ruff (a fast Python linter)
     - name: Lint code with ruff
       run: |
         pip install ruff
-        ruff check app/ --output-format=github --target-version=py310 || echo "Linting issues found but not failing."
+        ruff check app/ --output-format=github --target-version=py310 || echo "Linting issues found."
 
-  # ------ CONTINUOUS DEPLOYMENT (BUILD & DEPLOY) ------
+    - name: Run tests with pytest and coverage
+      run: |
+        pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: htmlcov/
+        retention-days: 7
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: junit/
+        retention-days: 7
+      if: ${{ always() }}
+
+  # ============================================
+  # CONTINUOUS DEPLOYMENT (BUILD & DEPLOY)
+  # ============================================
   build-and-deploy:
     name: Continuous Deployment (Build & Deploy)
     needs: test
     runs-on: ubuntu-latest
-    # Only run this job on pushes to main, not on pull requests
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -68,21 +88,45 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=latest
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # ----- (Optional) Example Deployment Steps -----
-      # Uncomment and adapt one of these blocks to deploy to a cloud platform.
-      #
-      # - name: Deploy to Streamlit Cloud (via API or custom action)
+      - name: Deployment Notification
+        run: |
+          echo "🎉 Docker image pushed successfully!"
+          echo "📦 Image: ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          echo "🏷️  Tags: ${{ steps.meta.outputs.tags }}"
+
+      # ============================================
+      # OPTIONAL: Deploy to Streamlit Cloud
+      # ============================================
+      # Uncomment and configure if using Streamlit Cloud
+      # - name: Deploy to Streamlit Cloud
       #   run: |
-      #     echo "Add deployment step for Streamlit Cloud here."
-      #     # You might need a custom script using Streamlit's deploy API.
-      #
+      #     echo "Deploying to Streamlit Cloud..."
+      #     # Streamlit Cloud automatically deploys from GitHub
+      #     # No action needed if repository is connected
+
+      # ============================================
+      # OPTIONAL: Deploy to Hugging Face Spaces
+      # ============================================
+      # Uncomment and configure if using Hugging Face Spaces
       # - name: Deploy to Hugging Face Spaces
       #   uses: huggingface/hub-actions@main
       #   with:
