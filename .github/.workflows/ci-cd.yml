@@ -12,10 +12,10 @@ permissions:
 
 jobs:
   # ============================================
-  # CONTINUOUS INTEGRATION (TEST)
+  # STAGE 1: PYTHON APPLICATION (TESTING)
   # ============================================
   test:
-    name: Continuous Integration (Test)
+    name: Python Application (Test)
     runs-on: ubuntu-latest
 
     steps:
@@ -38,13 +38,14 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pytest pytest-cov
 
     - name: Lint code with ruff
       run: |
         pip install ruff
         ruff check app/ --output-format=github --target-version=py310 || echo "Linting issues found."
 
-    - name: Run tests with pytest and coverage
+    - name: Run tests with pytest
       run: |
         pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
 
@@ -55,21 +56,14 @@ jobs:
         path: htmlcov/
         retention-days: 7
 
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: junit/
-        retention-days: 7
-      if: ${{ always() }}
-
   # ============================================
-  # CONTINUOUS DEPLOYMENT (BUILD & DEPLOY)
+  # STAGE 2: OPTIONAL DOCKER IMAGE (DEPLOYMENT)
   # ============================================
   build-and-deploy:
-    name: Continuous Deployment (Build & Deploy)
+    name: Docker Image (Optional Deployment)
     needs: test
     runs-on: ubuntu-latest
+    # Only run on pushes to main, not on pull requests
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -88,50 +82,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=sha,prefix=,format=short
-            type=raw,value=latest
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ghcr.io/${{ github.repository }}:latest
 
-      - name: Deployment Notification
+      - name: Deployment successful
         run: |
-          echo "🎉 Docker image pushed successfully!"
-          echo "📦 Image: ghcr.io/${{ github.repository }}:${{ github.sha }}"
-          echo "🏷️  Tags: ${{ steps.meta.outputs.tags }}"
-
-      # ============================================
-      # OPTIONAL: Deploy to Streamlit Cloud
-      # ============================================
-      # Uncomment and configure if using Streamlit Cloud
-      # - name: Deploy to Streamlit Cloud
-      #   run: |
-      #     echo "Deploying to Streamlit Cloud..."
-      #     # Streamlit Cloud automatically deploys from GitHub
-      #     # No action needed if repository is connected
-
-      # ============================================
-      # OPTIONAL: Deploy to Hugging Face Spaces
-      # ============================================
-      # Uncomment and configure if using Hugging Face Spaces
-      # - name: Deploy to Hugging Face Spaces
-      #   uses: huggingface/hub-actions@main
-      #   with:
-      #     huggingface_token: ${{ secrets.HF_TOKEN }}
-      #     repository: ${{ secrets.HF_USERNAME }}/smart-agent
-      #     repository_type: space
-      #     space_sdk: streamlit
-      #     files: .
+          echo "✅ Docker image built and pushed to ghcr.io"
+          echo "📦 ghcr.io/${{ github.repository }}:latest"
