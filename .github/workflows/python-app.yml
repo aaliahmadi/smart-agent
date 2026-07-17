@@ -1,4 +1,4 @@
-name: CI/CD for Smart Agent
+name: CICD for Smart Agent
 
 on:
   push:
