@@ -1,4 +1,4 @@
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 # ReAct prompt for online mode with chat memory 
 react_prompt = PromptTemplate.from_template(
